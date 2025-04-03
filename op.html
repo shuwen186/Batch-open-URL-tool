@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>批量打开网址工具</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        .form-group {
+            margin-bottom: 15px;
+            position: relative;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        textarea {
+            width: 100%;
+            height: 200px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        .options-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #eee;
+            border-radius: 4px;
+            background-color: #f9f9f9;
+        }
+        .option-group {
+            margin-bottom: 10px;
+            min-width: 200px;
+        }
+        .option-title {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .option-group select, .option-group input {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 100%;
+        }
+        .buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #openButton, #batchOpenButton {
+            background-color: #2196F3;
+        }
+        #openButton:hover, #batchOpenButton:hover {
+            background-color: #0b7dda;
+        }
+        .copy-button {
+            background-color: #9c27b0;
+        }
+        .copy-button:hover {
+            background-color: #7b1fa2;
+        }
+        .url-count {
+            margin-top: 10px;
+            font-weight: bold;
+        }
+        .url-list {
+            margin-top: 20px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+            background-color: #f9f9f9;
+            position: relative;
+            display: none;
+        }
+        .url-item {
+            padding: 5px;
+            border-bottom: 1px solid #eee;
+            word-break: break-all;
+        }
+        .url-item:last-child {
+            border-bottom: none;
+        }
+        .copy-tooltip {
+            position: absolute;
+            background-color: #333;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            z-index: 100;
+            display: none;
+        }
+        .batch-info {
+            display: none;
+            margin-top: 15px;
+            padding: 10px;
+            background-color: #e3f2fd;
+            border: 1px solid #bbdefb;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <h1>批量打开网址工具</h1>
+    
+    <div class="options-container">
+        <div class="option-group">
+            <div class="option-title">协议选择：</div>
+            <select id="protocol">
+                <option value="auto" selected>自动（保留原协议）</option>
+                <option value="http">强制 HTTP</option>
+                <option value="https">强制 HTTPS</option>
+            </select>
+        </div>
+        
+        <div class="option-group">
+            <div class="option-title">域名类型：</div>
+            <select id="domain_type">
+                <option value="original" selected>保持原样</option>
+                <option value="root">使用根域名（去掉www）</option>
+                <option value="www">使用www子域名</option>
+            </select>
+        </div>
+        
+        <div class="option-group">
+            <div class="option-title">批量打开数量：</div>
+            <input type="number" id="batch_size" min="1" max="50" value="5">
+        </div>
+        
+        <div class="option-group">
+            <div class="option-title">批次间隔（秒）：</div>
+            <input type="number" id="batch_delay" min="1" max="60" value="3">
+        </div>
+    </div>
+    
+    <div class="form-group">
+        <label for="urls">请输入需要打开的网址（每行一个）：</label>
+        <textarea id="urls" placeholder="例如：
+www.example1.com
+https://www.example2.com
+example3.com"></textarea>
+    </div>
+    
+    <div class="buttons">
+        <button type="button" id="processButton">处理网址</button>
+        <button type="button" id="copyInputButton" class="copy-button">复制输入内容</button>
+        <button type="button" id="openButton" style="display:none;">一次性打开全部（0）</button>
+        <button type="button" id="batchOpenButton" style="display:none;">分批打开（每批5个）</button>
+        <button type="button" id="copyProcessedButton" class="copy-button" style="display:none;">复制处理后的URL</button>
+    </div>
+    
+    <div id="copyInputTooltip" class="copy-tooltip">已复制!</div>
+    
+    <div class="url-count" id="urlCount" style="display:none;">
+        共处理 0 个有效网址
+    </div>
+    
+    <div class="batch-info" id="batchInfo">
+        <div id="batchStatus">准备分批打开网址...</div>
+        <div id="batchProgress"></div>
+    </div>
+    
+    <div class="url-list" id="urlList">
+        <div id="copyProcessedTooltip" class="copy-tooltip">已复制!</div>
+    </div>
+    
+    <!-- 隐藏的textarea用于存储处理后的URL，方便复制 -->
+    <textarea id="processedUrlsText" style="position: absolute; left: -9999px;"></textarea>
+    
+    <script>
+        // 全局变量存储处理后的URL
+        let processedUrls = [];
+        
+        // 处理网址按钮点击事件
+        document.getElementById('processButton').addEventListener('click', function() {
+            const protocol = document.getElementById('protocol').value;
+            const domain_type = document.getElementById('domain_type').value;
+            const batch_size = parseInt(document.getElementById('batch_size').value);
+            const rawUrls = document.getElementById('urls').value;
+            
+            // 更新批量打开按钮的文本
+            document.getElementById('batchOpenButton').textContent = `分批打开（每批${batch_size}个）`;
+            
+            // 处理URL
+            processedUrls = processUrls(rawUrls, protocol, domain_type);
+            
+            // 显示处理结果
+            displayProcessedUrls(processedUrls);
+        });
+        
+        // 处理URL的函数
+        function processUrls(rawUrls, protocol, domain_type) {
+            const urlList = rawUrls.split(/\r?\n/);
+            const processedUrls = [];
+            
+            for (let url of urlList) {
+                url = url.trim();
+                if (url === '') {
+                    continue;
+                }
+                
+                // 处理域名类型（www或根域名）
+                if (domain_type === 'root' || domain_type === 'www') {
+                    // 先去除现有协议以便处理域名
+                    const noProtocolMatch = url.match(/^(?:f|ht)tps?:\/\/(.*)/i);
+                    let noProtocol = noProtocolMatch ? noProtocolMatch[1] : url;
+                    let originalProtocol = noProtocolMatch ? url.split('://')[0] : '';
+                    
+                    // 根据选择添加或移除www
+                    if (domain_type === 'root' && noProtocol.startsWith('www.')) {
+                        noProtocol = noProtocol.substring(4);
+                    } else if (domain_type === 'www' && !noProtocol.startsWith('www.')) {
+                        noProtocol = 'www.' + noProtocol;
+                    }
+                    
+                    // 根据协议选择重建URL
+                    if (protocol === 'http') {
+                        url = 'http://' + noProtocol;
+                    } else if (protocol === 'https') {
+                        url = 'https://' + noProtocol;
+                    } else {
+                        // 自动模式下保留原始协议
+                        if (originalProtocol) {
+                            url = originalProtocol + '://' + noProtocol;
+                        } else {
+                            url = 'http://' + noProtocol;
+                        }
+                    }
+                } else {
+                    // 保留原始域名结构，仅处理协议
+                    const hasProtocol = /^(?:f|ht)tps?:\/\//i.test(url);
+                    
+                    if (!hasProtocol) {
+                        // 无协议，添加协议
+                        if (protocol === 'https') {
+                            url = 'https://' + url;
+                        } else {
+                            // 默认使用http
+                            url = 'http://' + url;
+                        }
+                    } else if (protocol !== 'auto') {
+                        // 已有协议但需要强制使用特定协议
+                        const noProtocolMatch = url.match(/^(?:f|ht)tps?:\/\/(.*)/i);
+                        const noProtocol = noProtocolMatch ? noProtocolMatch[1] : url;
+                        url = (protocol === 'https' ? 'https://' : 'http://') + noProtocol;
+                    }
+                }
+                
+                // 简单验证URL格式
+                if (isValidUrl(url)) {
+                    processedUrls.push(url);
+                }
+            }
+            
+            return processedUrls;
+        }
+        
+        // 简单的URL验证函数
+        function isValidUrl(string) {
+            try {
+                new URL(string);
+                return true;
+            } catch (_) {
+                return false;
+            }
+        }
+        
+        // 显示处理后的URL
+        function displayProcessedUrls(urls) {
+            const urlCount = document.getElementById('urlCount');
+            const urlList = document.getElementById('urlList');
+            const openButton = document.getElementById('openButton');
+            const batchOpenButton = document.getElementById('batchOpenButton');
+            const copyProcessedButton = document.getElementById('copyProcessedButton');
+            const processedUrlsText = document.getElementById('processedUrlsText');
+            
+            // 更新URL计数
+            urlCount.textContent = `共处理 ${urls.length} 个有效网址`;
+            urlCount.style.display = urls.length > 0 ? 'block' : 'none';
+            
+            // 清空URL列表
+            urlList.innerHTML = '';
+            // 重新添加复制提示元素
+            const copyTooltip = document.createElement('div');
+            copyTooltip.id = 'copyProcessedTooltip';
+            copyTooltip.className = 'copy-tooltip';
+            copyTooltip.textContent = '已复制!';
+            urlList.appendChild(copyTooltip);
+            
+            // 添加URL列表项
+            urls.forEach((url, index) => {
+                const urlItem = document.createElement('div');
+                urlItem.className = 'url-item';
+                urlItem.dataset.index = index;
+                
+                const link = document.createElement('a');
+                link.href = url;
+                link.target = '_blank';
+                link.textContent = url;
+                
+                urlItem.appendChild(link);
+                urlList.appendChild(urlItem);
+            });
+            
+            // 更新按钮文本和显示状态
+            openButton.textContent = `一次性打开全部（${urls.length}）`;
+            openButton.style.display = urls.length > 0 ? 'block' : 'none';
+            batchOpenButton.style.display = urls.length > 0 ? 'block' : 'none';
+            copyProcessedButton.style.display = urls.length > 0 ? 'block' : 'none';
+            urlList.style.display = urls.length > 0 ? 'block' : 'none';
+            
+            // 更新处理后的URL文本用于复制
+            processedUrlsText.value = urls.join('\n');
+            
+            // 启用相关按钮
+            openButton.disabled = false;
+            batchOpenButton.disabled = false;
+        }
+        
+        // 一次性批量打开URL的功能
+        document.getElementById('openButton').addEventListener('click', function() {
+            // 确认是否要打开多个网址
+            if (processedUrls.length > 10) {
+                if (!confirm('您确定要同时打开 ' + processedUrls.length + ' 个网址吗？这可能会导致浏览器卡顿。')) {
+                    return;
+                }
+            }
+            
+            // 批量打开网址
+            processedUrls.forEach(url => {
+                window.open(url, '_blank');
+            });
+        });
+        
+        // 分批打开URL的功能
+        document.getElementById('batchOpenButton').addEventListener('click', function() {
+            const batchSize = parseInt(document.getElementById('batch_size').value);
+            const batchDelay = parseInt(document.getElementById('batch_delay').value) * 1000; // 转换为毫秒
+            const totalBatches = Math.ceil(processedUrls.length / batchSize);
+            const batchInfo = document.getElementById('batchInfo');
+            const batchStatus = document.getElementById('batchStatus');
+            const batchProgress = document.getElementById('batchProgress');
+            
+            // 显示批处理信息区域
+            batchInfo.style.display = 'block';
+            
+            // 确认是否开始分批打开
+            if (!confirm('将分' + totalBatches + '批打开共' + processedUrls.length + '个网址，每批' + batchSize + '个，间隔' + (batchDelay/1000) + '秒。确定开始？')) {
+                batchInfo.style.display = 'none';
+                return;
+            }
+            
+            // 禁用按钮，防止重复点击
+            this.disabled = true;
+            document.getElementById('openButton').disabled = true;
+            
+            // 高亮显示当前处理的URL
+            function highlightUrl(index, highlight) {
+                const urlItem = document.querySelector(`.url-item[data-index="${index}"]`);
+                if (urlItem) {
+                    urlItem.style.backgroundColor = highlight ? '#e3f2fd' : '';
+                }
+            }
+            
+            // 分批打开函数
+            let currentBatch = 0;
+            
+            function openNextBatch() {
+                if (currentBatch >= totalBatches) {
+                    // 所有批次处理完毕
+                    batchStatus.textContent = '所有URL已打开完成！';
+                    document.getElementById('batchOpenButton').disabled = false;
+                    document.getElementById('openButton').disabled = false;
+                    return;
+                }
+                
+                // 计算当前批次的起始和结束索引
+                const startIndex = currentBatch * batchSize;
+                const endIndex = Math.min(startIndex + batchSize, processedUrls.length);
+                
+                // 更新状态信息
+                batchStatus.textContent = `正在打开第 ${currentBatch + 1}/${totalBatches} 批（${startIndex + 1} 至 ${endIndex} 个网址）`;
+                batchProgress.textContent = `总进度: ${Math.round((currentBatch * batchSize / processedUrls.length) * 100)}%`;
+                
+                // 打开当前批次的URL
+                for (let i = startIndex; i < endIndex; i++) {
+                    highlightUrl(i, true);
+                    window.open(processedUrls[i], '_blank');
+                }
+                
+                // 准备打开下一批
+                currentBatch++;
+                
+                // 如果还有下一批，延时后再处理
+                if (currentBatch < totalBatches) {
+                    setTimeout(function() {
+                        // 取消之前批次的高亮显示
+                        for (let i = startIndex; i < endIndex; i++) {
+                            highlightUrl(i, false);
+                        }
+                        openNextBatch();
+                    }, batchDelay);
+                } else {
+                    // 最后一批处理完成
+                    setTimeout(function() {
+                        batchStatus.textContent = '所有URL已打开完成！';
+                        batchProgress.textContent = '总进度: 100%';
+                        document.getElementById('batchOpenButton').disabled = false;
+                        document.getElementById('openButton').disabled = false;
+                        
+                        // 取消最后一批的高亮
+                        for (let i = startIndex; i < endIndex; i++) {
+                            highlightUrl(i, false);
+                        }
+                    }, 1000);
+                }
+            }
+            
+            // 开始第一批处理
+            openNextBatch();
+        });
+        
+        // 复制输入框内容的功能
+        document.getElementById('copyInputButton').addEventListener('click', function() {
+            const inputTextarea = document.getElementById('urls');
+            
+            // 使用Clipboard API (现代浏览器)
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(inputTextarea.value)
+                    .then(() => showTooltip('copyInputTooltip', this))
+                    .catch(err => console.error('复制失败:', err));
+            } else {
+                // 回退方法
+                inputTextarea.select();
+                document.execCommand('copy');
+                showTooltip('copyInputTooltip', this);
+            }
+        });
+        
+        // 复制处理后URL的功能
+        document.getElementById('copyProcessedButton').addEventListener('click', function() {
+            const processedTextarea = document.getElementById('processedUrlsText');
+            
+            // 使用Clipboard API (现代浏览器)
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(processedTextarea.value)
+                    .then(() => showTooltip('copyProcessedTooltip', this))
+                    .catch(err => console.error('复制失败:', err));
+            } else {
+                // 回退方法
+                processedTextarea.select();
+                document.execCommand('copy');
+                showTooltip('copyProcessedTooltip', this);
+            }
+        });
+        
+        // 显示复制成功提示的函数
+        function showTooltip(tooltipId, buttonElement) {
+            const tooltip = document.getElementById(tooltipId);
+            tooltip.style.display = 'block';
+            tooltip.style.top = (buttonElement.offsetTop - 30) + 'px';
+            tooltip.style.left = (buttonElement.offsetLeft + buttonElement.offsetWidth / 2 - 30) + 'px';
+            
+            setTimeout(function() {
+                tooltip.style.display = 'none';
+            }, 2000);
+        }
+    </script>
+</body>
+</html>
